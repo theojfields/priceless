@@ -1,0 +1,38 @@
+{
+  "name": "priceless",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Private shopping research with disposable, synthetic-context agents and Tinfoil confidential inference.",
+  "engines": {
+    "node": "^24.22.1 || >=26.12.1"
+  },
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "start": "node dist/server/server/index.js",
+    "check": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "verify": "npm run check && npm test && npm run build",
+    "prepare:tinfoil": "node scripts/prepare-tinfoil.mjs",
+    "provision": "node scripts/provision.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tinfoil": "1.4.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "node": "^24.22.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  }
+}
