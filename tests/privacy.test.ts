@@ -142,6 +142,15 @@ test("prices require an exact source excerpt, exact product, matching currency, 
     ).length,
     0,
   );
+  const unrelated = {
+    ...sources[0],
+    title: "Different headphones",
+    content: "Different headphones. New. Current public price $269.99.",
+  };
+  assert.equal(
+    groundedOffers({ offers: [offer] }, [unrelated], goal, "worker").length,
+    0,
+  );
 });
 test("only the pinned owner can provision, signatures bind secrets, and challenges cannot replay", () => {
   const owner = generateKeyPairSync("ed25519");

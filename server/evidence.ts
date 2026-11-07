@@ -62,6 +62,7 @@ export function groundedOffers(
       item.condition !== "new" ||
       item.currency !== goal.currency ||
       !productMatches(goal, item.title) ||
+      !productMatches(goal, `${source.title} ${source.content}`) ||
       !normalize(source.content).includes(normalize(item.evidence)) ||
       !evidenceContainsPrice(item.evidence, item.price, item.currency) ||
       /\b(refurbished|pre-owned|renewed|per month|monthly|installment|was\s+[$£]|used condition)\b/i.test(

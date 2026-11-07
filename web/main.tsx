@@ -140,6 +140,8 @@ function App() {
         setProduct("");
         setVariant("");
         setSourceUrls("");
+        setLink("");
+        setGoalText("");
         setError("This search expired and has been cleared.");
       },
       Math.max(0, Date.parse(run.expiresAt) - Date.now()),
