@@ -1,0 +1,29 @@
+name: Import verified Priceless source
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: priceless-source-import
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - name: Verify and unpack reviewed source archive
+        run: |
+          echo "9b00077f2f6804df6726309ee03ddb8547c7c8218252720c4692d85be9aa6d7e  priceless-source.zip" | sha256sum --check --strict
+          mkdir /tmp/priceless-reviewed-source
+          unzip -q priceless-source.zip -d /tmp/priceless-reviewed-source
+      - name: Import application source into this repository
+        run: |
+          for path in .dockerignore .env.example .gitignore Dockerfile README.md deploy docs package.json package-lock.json scripts server shared tests tsconfig.json tsconfig.server.json vite.config.ts web; do
+            cp -R "/tmp/priceless-reviewed-source/$path" .
+            git add -- "$path"
+          done
+          git rm priceless-source.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Import verified Priceless application source"
+          git push origin "HEAD:$GITHUB_REF_NAME"
