@@ -1,0 +1,53 @@
+name: Build Priceless and prepare Tinfoil release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, such as v0.1.0
+        required: true
+        type: string
+concurrency:
+  group: priceless-tinfoil-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      actions: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - name: Validate release settings
+        env:
+          VERSION: ${{ inputs.version }}
+          CONFIG_REPO: ${{ github.repository }}
+        run: |
+          node -e 'if (!/^v\d+\.\d+\.\d+$/.test(process.env.VERSION)) process.exit(1); const c = require("./deploy/settings.json"); if (c.configRepo !== process.env.CONFIG_REPO) process.exit(1);'
+          test -f deploy/owner-public.pem
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION"; then exit 1; fi
+      - name: Build and publish immutable application image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONFIG_REPO: ${{ github.repository }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          IMAGE="ghcr.io/${CONFIG_REPO,,}"
+          docker buildx create --use
+          docker buildx build --platform linux/amd64 --build-arg "PRICELESS_CONFIG_REPO=$CONFIG_REPO" --tag "$IMAGE:$GITHUB_SHA" --metadata-file /tmp/image.json --push .
+          DIGEST=$(node -p 'JSON.parse(require("fs").readFileSync("/tmp/image.json"))["containerimage.digest"]')
+          node scripts/render-config.mjs --image "$IMAGE@$DIGEST"
+      - name: Commit measured config, tag, and dispatch signed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tinfoil-config.yml
+          git commit -m "Pin Priceless image for $VERSION"
+          git tag "$VERSION"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          git push origin "$VERSION"
+          gh workflow run tinfoil-release-publish.yml --ref "$VERSION"

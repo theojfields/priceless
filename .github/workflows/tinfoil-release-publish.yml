@@ -1,0 +1,19 @@
+name: Publish measured Tinfoil release
+on:
+  workflow_dispatch:
+concurrency:
+  group: priceless-measure-${{ github.ref_name }}
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Measure image, attest, and publish release
+        uses: tinfoilsh/measure-image-action@beba4296251f7a9bc44b481ebafe4863509e4380
+        with:
+          config-file: ${{ github.workspace }}/tinfoil-config.yml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
