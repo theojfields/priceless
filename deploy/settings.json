@@ -1,0 +1,5 @@
+{
+  "configRepo": "theojfields/priceless",
+  "enclaveURL": "https://priceless.priceless.containers.tinfoil.dev",
+  "cvmVersion": "0.14.17"
+}
