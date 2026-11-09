@@ -1,0 +1,50 @@
+# Generated from deploy/settings.json and a pinned container digest. Contains no private secrets.
+cvm-version: "0.14.17"
+cpus: 2
+memory: 4096
+
+networks:
+  providers:
+    egress: allowlist
+    allow:
+      - inference.tinfoil.sh
+      - websearch.tinfoil.sh
+      - atc.tinfoil.sh
+      - github-proxy.tinfoil.sh
+      - kds-proxy.tinfoil.sh
+      - api.github.com
+      - github.com
+      - raw.githubusercontent.com
+      - objects.githubusercontent.com
+      - release-assets.githubusercontent.com
+      - fulcio.sigstore.dev
+      - rekor.sigstore.dev
+      - tuf-repo-cdn.sigstore.dev
+
+containers:
+  - name: priceless
+    image: "ghcr.io/theojfields/priceless@sha256:ed88301843455b555f6274ee7bfef9361e7eebfda159548776e17492e7c180d5"
+    user: "1000:1000"
+    networks: [providers]
+    read_only: true
+    pids_limit: 128
+    tmpfs:
+      /tmp: "size=64m,mode=1777,noexec,nosuid,nodev"
+    env:
+      - NODE_ENV: production
+      - HOST: "0.0.0.0"
+      - PORT: "8080"
+      - PRICELESS_ENCLAVE_URL: "https://priceless.priceless.containers.tinfoil.dev"
+      - PRICELESS_CONFIG_REPO: "theojfields/priceless"
+      - PRICELESS_CLIENT_ORIGINS: "http://127.0.0.1:3210,http://localhost:3210"
+      - PRICELESS_OWNER_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEAMk51JQuuvToC3GXnn3UuL3qS/0REYD1XySd3gGdG4Sc=\\n-----END PUBLIC KEY-----\\n"
+      - TINFOIL_MODEL: gpt-oss-120b
+
+shim:
+  upstream-port: 8080
+  origins:
+    - "https://priceless.priceless.containers.tinfoil.dev"
+    - http://127.0.0.1:3210
+    - http://localhost:3210
+  paths:
+    - /*
