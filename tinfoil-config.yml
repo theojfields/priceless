@@ -23,7 +23,7 @@ networks:
 
 containers:
   - name: priceless
-    image: "ghcr.io/theojfields/priceless@sha256:ed88301843455b555f6274ee7bfef9361e7eebfda159548776e17492e7c180d5"
+    image: "ghcr.io/theojfields/priceless@sha256:0fb046a3acac0848f87012894616f0d4da0cdc019a082a7fb6a6aa99b1761fc7"
     user: "1000:1000"
     networks: [providers]
     read_only: true
