@@ -31,9 +31,11 @@ import {
   Unplug,
   X,
 } from "lucide-react";
-import type { AppConfig, Offer, ShoppingRun } from "../shared/types";
+import type { AppConfig, Offer, ShoppingRun, ShoppingDraft } from "../shared/types";
 import { exampleRun } from "./sample";
 import { initialize, operation, type CreateResponse } from "./api";
+import { GuidePanel } from "./guide-panel";
+import { useGuide } from "./use-guide";
 import "./styles.css";
 
 type View = "search" | "how" | "privacy";
@@ -72,7 +74,7 @@ function App() {
   const [sourceUrls, setSourceUrls] = useState("");
   const [link, setLink] = useState("");
   const [goalText, setGoalText] = useState("");
-  const [preparing, setPreparing] = useState<"link" | "goal" | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +83,13 @@ function App() {
   const [offerDetail, setOfferDetail] = useState<Offer | null>(null);
   const [copied, setCopied] = useState(false);
   const [budgetOnly, setBudgetOnly] = useState(false);
+  const guided = useGuide(accessToken, () => {
+    setGoalText("");
+    setProduct("");
+    setVariant("");
+    setSourceUrls("");
+    setReviewOpen(false);
+  });
   const active = run?.status === "running";
   useEffect(() => {
     let current = true;
@@ -159,36 +168,36 @@ function App() {
       setConnectionOpen(true);
       return;
     }
-    setPreparing(kind);
+    if (kind === "goal") {
+      await guided.start(goalText.trim(), country);
+      return;
+    }
+    setPreparing(true);
     try {
       const result = await operation<
-        | {
-            draft: {
-              product: string;
-              variant: string;
-              country: string;
-              sourceUrls: string[];
-            };
-          }
+        | { draft: ShoppingDraft }
         | { clarification: string }
       >(
         "prepare",
-        { kind, text: kind === "link" ? link : goalText, country },
+        { kind, text: link, country },
         accessToken,
       );
       if ("clarification" in result) {
         setError(result.clarification);
         return;
       }
-      setProduct(result.draft.product);
-      setVariant(result.draft.variant);
-      setSourceUrls(result.draft.sourceUrls.join("\n"));
-      setReviewOpen(true);
+      reviewDraft(result.draft);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setPreparing(null);
+      setPreparing(false);
     }
+  }
+  function reviewDraft(draft: ShoppingDraft) {
+    setProduct(draft.product);
+    setVariant(draft.variant);
+    setSourceUrls(draft.sourceUrls.join("\n"));
+    setReviewOpen(true);
   }
   async function start(event: React.FormEvent) {
     event.preventDefault();
@@ -220,6 +229,7 @@ function App() {
       setRun(data.run);
       setRunKey(data.runKey);
       setReviewOpen(false);
+      if (guided.guide) void guided.clear();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -265,6 +275,7 @@ function App() {
   function showExample() {
     setError("");
     setBudgetOnly(false);
+    if (guided.guide) void guided.clear();
     setRun(exampleRun());
     setView("search");
   }
@@ -428,21 +439,35 @@ function App() {
           </div>
         </header>
         <div className="content">
-          {view === "search" && !run && (
+          {view === "search" && guided.guide && !run && (
+            <GuidePanel
+              guide={guided.guide}
+              error={guided.error}
+              active={guided.active}
+              busy={guided.busy}
+              canReply={guided.canReply}
+              onReply={guided.reply}
+              onStop={() => void guided.stop()}
+              onClear={() => { setGoalText(""); setReviewOpen(false); setError(""); void guided.clear(); }}
+              onCompare={reviewDraft}
+              onRetry={() => void guided.start(goalText, country)}
+            />
+          )}
+          {view === "search" && !run && !guided.guide && (
             <>
               <section className="entry-heading">
                 <div className="eyebrow">
                   <span /> A FRESH START FOR EVERY SEARCH
                 </div>
                 <h1>What are we shopping for?</h1>
-                <p>The product, the price. Your personal history stays out.</p>
+                <p>Find the right option and see what it costs. Your personal history stays out.</p>
               </section>
               <section
                 className="entry-choices"
                 aria-label="Start a shopping search"
               >
                 <form
-                  className={`entry-card ${preparing === "link" ? "preparing" : ""}`}
+                  className={`entry-card ${preparing ? "preparing" : ""}`}
                   onSubmit={(event) => {
                     void prepare(event, "link");
                   }}
@@ -477,7 +502,7 @@ function App() {
                       type="submit"
                       disabled={!!preparing}
                     >
-                      {preparing === "link" ? (
+                      {preparing ? (
                         <LoaderCircle size={18} className="spin" />
                       ) : (
                         <ArrowRight size={18} />
@@ -490,7 +515,7 @@ function App() {
                   or
                 </span>
                 <form
-                  className={`entry-card ${preparing === "goal" ? "preparing" : ""}`}
+                  className="entry-card"
                   onSubmit={(event) => {
                     void prepare(event, "goal");
                   }}
@@ -504,13 +529,13 @@ function App() {
                   <h2>
                     <label htmlFor="shopping-goal">State a goal</label>
                   </h2>
-                  <p>Tell your agent what you want to find.</p>
+                  <p>Describe what you need. We’ll start there and ask if a detail would help.</p>
                   <textarea
                     id="shopping-goal"
                     className="entry-input"
                     value={goalText}
                     onChange={(event) => setGoalText(event.target.value)}
-                    placeholder="Find the best price for Sony WH-1000XM5 headphones in black…"
+                    placeholder="Find me a flight from Columbus to Atlanta next Monday morning…"
                     required
                     minLength={2}
                     maxLength={500}
@@ -519,18 +544,14 @@ function App() {
                     disabled={!!preparing}
                   />
                   <div className="entry-card-footer">
-                    <span>Include the product or model</span>
+                    <span>Flights, products, or a shopping idea</span>
                     <button
                       className="entry-submit"
                       type="submit"
                       disabled={!!preparing}
                     >
-                      {preparing === "goal" ? (
-                        <LoaderCircle size={18} className="spin" />
-                      ) : (
-                        <ArrowRight size={18} />
-                      )}
-                      <span className="sr-only">Continue with goal</span>
+                      <ArrowRight size={18} />
+                      <span className="sr-only">Start guided search</span>
                     </button>
                   </div>
                 </form>
@@ -598,10 +619,10 @@ function App() {
                   </div>
                 </details>
               </div>
-              {error && (
+              {(error || guided.error) && (
                 <div className="error-message" role="alert">
                   <Info size={16} />
-                  {error}
+                  {error || guided.error}
                 </div>
               )}
               <div className="example-row">
@@ -1275,18 +1296,18 @@ function InfoPage({
       ? [
           [
             "01",
-            "Lock the shopping goal",
-            "An exact product, variant, new condition, currency, and market become the fixed task. A worker cannot rewrite those requirements.",
+            "Start with a link or a goal",
+            "For a flight or a shopping idea, the app starts with the details you have and asks what would help narrow the search. For an exact product, review the item and variant before starting a price comparison.",
           ],
           [
             "02",
             "Generate independent shopping styles",
-            "A neutral control and two synthetic styles receive no user profile. They vary search phrasing, rather than pretending to be a real person.",
+            "For a product comparison, a neutral control and two synthetic styles search for the same confirmed item. Their phrasing varies and none receives a user profile.",
           ],
           [
             "03",
             "Retrieve and check the sources",
-            "Workers use Tinfoil’s attested search and page retrieval. A price must appear in a fetched source excerpt and match the product requirements.",
+            "Tinfoil’s attested search finds public sources. Product prices must appear in a fetched excerpt and match the item. Flight references point you to the provider for current fares and availability.",
           ],
           [
             "04",
@@ -1308,7 +1329,7 @@ function InfoPage({
           [
             "03",
             "Confidential processing has boundaries",
-            "In production, the browser verifies the configured Tinfoil workload and encrypts request bodies. Tinfoil still observes operational metadata. External search providers receive product queries and source URLs.",
+            "In production, the browser verifies the configured Tinfoil workload and encrypts request bodies. Tinfoil still observes operational metadata. External search providers receive selected search terms and source URLs.",
           ],
           [
             "04",

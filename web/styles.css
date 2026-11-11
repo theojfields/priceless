@@ -2516,6 +2516,8 @@ h1 {
     border-color 0.2s,
     box-shadow 0.2s;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .entry-card:focus-within {
   border-color: #9aaa8b;
@@ -2555,6 +2557,7 @@ h1 {
   font-size: 11px;
   line-height: 1.6;
   margin: 11px 0 23px;
+  flex: 1;
 }
 .entry-input {
   width: 100%;
@@ -2685,6 +2688,60 @@ input.entry-input {
 }
 .goal-review-form .primary-button {
   margin-top: 20px;
+}
+
+.guide-shell {
+  max-width: 760px;
+  margin: 42px auto 56px;
+  color: #334631;
+}
+.guide-header, .guide-title, .guide-state, .guide-review, .guide-results-header,
+.guide-footnote, .guide-stop, .guide-provider {
+  display: flex;
+  align-items: center;
+}
+.guide-header { justify-content: space-between; gap: 12px; margin-bottom: 26px; }
+.guide-stop, .guide-provider { gap: 7px; padding: 9px 12px; border: 1px solid #dfe7d7; border-radius: 8px; color: #385436; font-size: 12px; white-space: nowrap; }
+.guide-stop:hover, .guide-provider:hover { background: #f0f4eb; }
+.guide-title { align-items: flex-start; gap: 14px; margin-bottom: 21px; }
+.guide-title .entry-icon { flex: 0 0 auto; }
+.guide-title h1 { margin: 3px 0 0; font-family: Georgia, serif; font-size: clamp(26px, 4vw, 38px); font-weight: 400; line-height: 1.12; overflow-wrap: anywhere; }
+.guide-conversation, .guide-results { background: #fff; border: 1px solid #e0e5d8; border-radius: 15px; padding: 22px; box-shadow: 0 4px 18px #34482f04; }
+.guide-turns, .guide-source-list { margin: 0; padding: 0; list-style: none; }
+.guide-turns { display: grid; gap: 10px; justify-items: end; }
+.guide-turns li { max-width: 88%; padding: 10px 13px; border-radius: 11px 11px 2px 11px; background: #eef3e9; overflow-wrap: anywhere; }
+.guide-turns span, .guide-details dt, .guide-source-list span { color: #5d7355; font-size: 11px; font-weight: 600; }
+.guide-turns p { margin: 4px 0 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.guide-state { gap: 8px; margin: 20px 0 12px; font-weight: 600; color: #52764a; font-size: 13px; }
+.guide-details { display: flex; flex-wrap: wrap; gap: 9px 12px; padding: 0; margin: 0 0 16px; }
+.guide-details > div { padding: 7px 10px; background: #fbfcf9; border: 1px solid #e8ece3; border-radius: 8px; }
+.guide-details dd { margin: 3px 0 0; font-size: 13px; }
+.guide-review { flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+.guide-review p { margin: 0; font-size: 13px; }
+.guide-warning { margin: 14px 0; }
+.guide-reply { margin-top: 18px; padding-top: 16px; border-top: 1px solid #e9ece4; }
+.guide-reply label { display: block; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.guide-reply p { margin: 4px 0 0; color: #687662; font-size: 12px; }
+.guide-reply-input { display: flex; align-items: flex-end; gap: 9px; margin-top: 10px; padding: 7px; background: #fcfcf9; border: 1px solid #e0e5d8; border-radius: 9px; }
+.guide-reply-input:focus-within { border-color: #92ab84; }
+.guide-reply-input textarea { flex: 1; width: 0; min-height: 54px; padding: 6px 7px; resize: vertical; border: 0; border-radius: 5px; background: transparent; font-size: 14px; line-height: 1.5; }
+.guide-reply-input button { flex: 0 0 36px; }
+.guide-results { margin-top: 16px; }
+.guide-results-header { justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.guide-results-header h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+.guide-results-header p { margin: 0; color: #657361; font-size: 13px; line-height: 1.5; }
+.guide-source-list { margin-top: 15px; }
+.guide-source-list li { border-top: 1px solid #e9ece4; }
+.guide-source-list a { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 12px 3px; border-radius: 4px; }
+.guide-source-list a:hover { background: #f6f8f4; }
+.guide-source-list h3 { font-size: 14px; margin: 4px 0; overflow-wrap: anywhere; }
+.guide-source-list p { margin: 0; color: #62705f; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.guide-footnote { gap: 7px; margin: 14px 0 0; font-size: 11px; color: #63785b; }
+@media (max-width: 650px) {
+  .guide-shell { margin-top: 24px; }
+  .guide-header { margin-bottom: 18px; }
+  .guide-conversation, .guide-results { padding: 15px; }
+  .guide-turns li { max-width: 96%; }
 }
 @media (min-width: 1500px) {
   .entry-heading {

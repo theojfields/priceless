@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ShoppingDraft } from "../shared/types.js";
 import { containsIdentifier, createGoal, publicProductUrl } from "./privacy.js";
 
 export const intakeInput = z.discriminatedUnion("kind", [
@@ -26,13 +27,7 @@ export const intakeInput = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 export type Intake = z.infer<typeof intakeInput>;
-export interface GoalDraft {
-  product: string;
-  variant: string;
-  country: Intake["country"];
-  sourceUrls: string[];
-}
-export type IntakeResult = { draft: GoalDraft } | { clarification: string };
+export type IntakeResult = { draft: ShoppingDraft } | { clarification: string };
 
 // Model output cannot silently replace the submitted product. The shopper reviews
 // this draft before it becomes the immutable worker goal.

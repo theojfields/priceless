@@ -66,3 +66,37 @@ export interface AppConfig {
   retentionMinutes: number;
   execution: "ephemeral-processes";
 }
+
+export interface ShoppingDraft {
+  product: string;
+  variant: string;
+  country: Goal["country"];
+  sourceUrls: string[];
+}
+
+export interface GuidePlan {
+  kind: "flight" | "discovery" | "product";
+  title: string;
+  details: { label: string; value: string }[];
+  question?: string;
+  draft?: ShoppingDraft;
+  flightSearchUrl?: string;
+}
+
+export interface GuideSource {
+  title: string;
+  url: string;
+  domain: string;
+  excerpt: string;
+}
+
+export interface GuidedSearch {
+  id: string;
+  revision: number;
+  status: "planning" | "searching" | "ready" | "failed" | "cancelled";
+  turns: string[];
+  plan?: GuidePlan;
+  sources: GuideSource[];
+  expiresAt: string;
+  warning?: string;
+}

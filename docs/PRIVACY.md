@@ -5,10 +5,13 @@ Priceless minimizes user information rather than promising absolute anonymity. I
 ## Data flow
 
 ```text
-Browser: public product link OR shopping goal + selected market
+Browser: public product link OR shopping goal and follow-ups + selected market
           | verified encrypted body in remote use
           v
-Confidential intake: fetch public page if linked; identify a supported product
+Confidential intake: interpret the goal or read the linked page
+          | guided goals: search public sources using selected terms
+          |               and ask for details in the same session
+          |
           | shopper reviews and edits draft before any comparison workers launch
           v
 Controller inside Tinfoil: immutable goal + independent persona seeds
@@ -31,9 +34,9 @@ The controller accepts a strict task schema. Unknown fields—including budgets 
 
 | Data | Recipient |
 | --- | --- |
-| Entered link or goal text, reviewed product, variant, country | Verified application enclave |
-| Goal text or retrieved linked page during product identification | Tinfoil inference enclave |
-| Product-derived search queries and source URLs | Tinfoil search enclave and its external provider |
+| Entered link, goal text and follow-ups, reviewed product, variant, selected market | Verified application enclave |
+| Goal text, follow-ups, or retrieved linked page during interpretation | Tinfoil inference enclave |
+| Selected product or trip search terms and source URLs | Tinfoil search enclave and its external provider |
 | Goal, synthetic style, source text | Tinfoil inference enclave |
 | Dedicated private price ceiling field | No external recipient; browser memory only |
 | Workspace access code and per-run capability | Application enclave, inside encrypted bodies |
@@ -42,12 +45,12 @@ The controller accepts a strict task schema. Unknown fields—including budgets 
 
 The application's production egress is restricted to providers and verification dependencies. It has no arbitrary browsing, shell, account, purchase, or filesystem tools available to the model. A worker's predefined workflow can request discovery, page retrieval, and extraction, once each. The parent constructs those requests from its own authoritative goal and retrieved data, not worker-supplied arbitrary arguments.
 
-Text typed into the goal box is sent to confidential inference to identify the product. Keep personal details out of it; use the separate private price ceiling field for a budget that must stay on the device. Public URLs have tracking parameters removed before page retrieval. Intake output must use product words supported by the supplied text or fetched page, and cannot start comparison workers until the shopper confirms the draft. Intake content is held only for the request; runtime/model caches have the separate limitations below.
+Goal text and follow-ups go to confidential inference to identify the request and retain details across replies. The application builds public searches from selected terms, such as the route and travel date, rather than sending the full conversation to the search provider. Keep personal details out of the goal and replies; use the separate price ceiling field for a budget that must stay on the device. Public URLs have tracking parameters removed before page retrieval. Exact product intake uses details supported by the supplied text or fetched page, and comparison workers only start after the shopper confirms the draft. Opening a fare link shares the search terms in that link with the fare provider in the user's ordinary browser.
 
 ## Retention and disposal
 
 - Forms, budget, access code, and results exist in browser memory; the app uses no cookies, localStorage, IndexedDB, analytics, or service worker.
-- Search records and result capabilities exist in server memory for a maximum of 15 minutes. Clearing removes the record and aborts active work. Reloading the browser loses its capability; server expiration still applies.
+- Search records, including guided search messages and result capabilities, exist in server memory for a maximum of 15 minutes. Clearing removes the record and aborts active work. Reloading the browser loses its capability; server expiration still applies.
 - Each worker is a new process with a minimal environment and ignored standard streams. Its broker closes after the process exits.
 - The app has no database, volumes, prompt logging, raw exception logging, or search-history endpoint.
 - Runtime provisioning secrets are lost when the enclave restarts. The owner key and workspace code remain on the trusted local machine in ignored private files.

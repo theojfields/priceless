@@ -21,7 +21,8 @@ The project includes a local Node 24 runtime to satisfy the pinned Tinfoil SDK's
 
 ## What is implemented
 
-- Two starting boxes: **Paste a link** or **State a goal**. Confidential intake identifies a supported product, then the shopper reviews it before the goal is locked. Broad requests ask for a product/model rather than inventing one.
+- Two starting boxes: **Paste a link** or **State a goal**. For flights and open-ended shopping requests, guided search starts with the details available and asks for missing details in the same conversation. Exact products still go through review before price comparison.
+- Flight searches surface public schedule and route references. Use the fare provider to verify availability and current prices.
 - Responsive comparison results, source excerpts, activity, cancellation, and clearing. Market and private price ceiling are under Shopping options.
 - A private budget filter that stays in browser memory and never enters a task or model prompt.
 - An immutable, hashed goal and independently seeded synthetic contexts, including a neutral control.
@@ -52,6 +53,7 @@ The comparison is a set of source-backed **observations**, not proof of a univer
 | `web/` | React interface, local-only budget, verified transport, labeled sample |
 | `server/privacy.ts` | Strict task boundary, goal integrity, independent personas, URL policy |
 | `server/intake.ts` | Strict link/goal intake and source-supported draft validation |
+| `server/guide.ts`, `server/guide-store.ts` | Guided flight and shopping research, follow-ups, and temporary sessions |
 | `server/worker.ts` | Disposable worker's fixed research workflow |
 | `server/runner.ts` | Worker process lifecycle and broker-only tools |
 | `server/tinfoil.ts` | Attested inference and MCP search/fetch integration |

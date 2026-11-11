@@ -10,7 +10,9 @@ import { z } from "zod";
 import { RunStore, safeEqual } from "./runs.js";
 import type { AppConfig } from "../shared/types.js";
 import { Provisioning } from "./provisioning.js";
-import { prepareShoppingGoal } from "./tinfoil.js";
+import { findGuideSources, planGuidedGoal, prepareShoppingGoal } from "./tinfoil.js";
+import { GuideStore } from "./guide-store.js";
+import { guideText } from "./guide.js";
 
 try {
   process.loadEnvFile(".env");
@@ -45,6 +47,10 @@ const runtime = {
   model: process.env.TINFOIL_MODEL ?? "gpt-oss-120b",
 };
 const store = new RunStore(runtime);
+const guides = new GuideStore({
+  plan: (context, signal) => planGuidedGoal(context, runtime.apiKey!, runtime.model, signal),
+  search: (query, country, signal) => findGuideSources(query, country, runtime.apiKey!, signal),
+});
 let pendingIntakes = 0;
 const provisioning = new Provisioning(
   process.env.PRICELESS_OWNER_PUBLIC_KEY?.replace(/\\n/g, "\n"),
@@ -171,6 +177,7 @@ const server = createServer(async (request, response) => {
         if (!provisioning.accept(provision))
           return json(response, 403, { error: "Owner signature rejected." });
         store.close();
+        guides.close();
         runtime.apiKey = provision.apiKey;
         appToken = provision.accessToken;
         return json(response, 200, { ok: true });
@@ -189,6 +196,20 @@ const server = createServer(async (request, response) => {
           error: "Enter your private workspace access code.",
         });
       delete input.accessToken;
+      if (path === "/api/runs/guide-start") {
+        if (!runtime.apiKey) return json(response, 503, { error: "Connect Tinfoil before starting a guided search." });
+        return json(response, 201, guides.create(input));
+      }
+      if (path === "/api/runs/guide-reply") {
+        const { runId, runKey, text } = runCredentials.extend({ text: guideText }).strict().parse(input);
+        const guide = guides.reply(runId, runKey, text);
+        return json(response, guide ? 200 : 404, guide ? { guide } : { error: "This search has expired or was cleared." });
+      }
+      if (path === "/api/runs/guide-read" || path === "/api/runs/guide-cancel" || path === "/api/runs/guide-clear") {
+        const { runId, runKey } = runCredentials.strict().parse(input);
+        const action = path.endsWith("-read") ? guides.read(runId, runKey) : path.endsWith("-cancel") ? guides.cancel(runId, runKey) : guides.clear(runId, runKey);
+        return json(response, action ? 200 : 404, action ? (typeof action === "boolean" ? { ok: true } : { guide: action }) : { error: "This search has expired or was cleared." });
+      }
       if (path === "/api/runs/prepare") {
         if (!runtime.apiKey)
           return json(response, 503, {
@@ -279,7 +300,7 @@ const server = createServer(async (request, response) => {
       error instanceof z.ZodError
         ? error.issues[0]?.message
         : error instanceof Error &&
-            /Use a public|Connect Tinfoil|workspace is busy|Request too large|JSON required/.test(
+            /Use a public|Connect Tinfoil|workspace is busy|follow-up limit|Request too large|JSON required/.test(
               error.message,
             )
           ? error.message
@@ -294,6 +315,7 @@ server.listen(port, host, () =>
 );
 function shutdown() {
   store.close();
+  guides.close();
   void vite?.close();
   server.close(() => process.exit(0));
 }
