@@ -60,6 +60,7 @@ export interface ShoppingRun {
 }
 export interface AppConfig {
   liveConfigured: boolean;
+  flightFaresConfigured?: boolean;
   enclaveURL: string | null;
   configRepo: string | null;
   accessRequired: boolean;
@@ -81,6 +82,29 @@ export interface GuidePlan {
   question?: string;
   draft?: ShoppingDraft;
   flightSearchUrl?: string;
+  canCheckFares?: boolean;
+}
+
+export interface FlightLeg {
+  from: string;
+  to: string;
+  departure: string;
+  arrival: string;
+  flights: string[];
+  segments: { flight: string; airline: string; from: string; to: string; departure: string; arrival: string }[];
+  fromName?: string;
+  toName?: string;
+  stops: number;
+}
+
+export interface FlightFare {
+  seller: string;
+  total: number;
+  currency: Goal["currency"];
+  bookingUrl: string;
+  legs: FlightLeg[];
+  adults: number;
+  checkedAt: string;
 }
 
 export interface GuideSource {
@@ -97,6 +121,7 @@ export interface GuidedSearch {
   turns: string[];
   plan?: GuidePlan;
   sources: GuideSource[];
+  fares?: FlightFare[];
   expiresAt: string;
   warning?: string;
 }

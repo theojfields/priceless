@@ -13,6 +13,7 @@ import { Provisioning } from "./provisioning.js";
 import { findGuideSources, planGuidedGoal, prepareShoppingGoal } from "./tinfoil.js";
 import { GuideStore } from "./guide-store.js";
 import { guideText } from "./guide.js";
+import { lookupFlightFares } from "./flights.js";
 
 try {
   process.loadEnvFile(".env");
@@ -44,12 +45,14 @@ if (!production && !["127.0.0.1", "::1", "localhost"].includes(host))
   );
 const runtime = {
   apiKey: process.env.TINFOIL_API_KEY,
+  flightApiKey: production ? undefined : process.env.SKYSCANNER_API_KEY,
   model: process.env.TINFOIL_MODEL ?? "gpt-oss-120b",
 };
 const store = new RunStore(runtime);
 const guides = new GuideStore({
   plan: (context, signal) => planGuidedGoal(context, runtime.apiKey!, runtime.model, signal),
   search: (query, country, signal) => findGuideSources(query, country, runtime.apiKey!, signal),
+  fares: (flight, signal) => lookupFlightFares(flight, runtime.flightApiKey!, signal),
 });
 let pendingIntakes = 0;
 const provisioning = new Provisioning(
@@ -135,6 +138,7 @@ const server = createServer(async (request, response) => {
       return json(response, 200, {
         ...config,
         liveConfigured: !!runtime.apiKey,
+        flightFaresConfigured: !!runtime.flightApiKey,
       });
     if (path.startsWith("/api/")) {
       const origin = request.headers.origin;
@@ -169,6 +173,7 @@ const server = createServer(async (request, response) => {
           .object({
             nonce: z.string().regex(/^[a-f0-9]{64}$/),
             apiKey: z.string().min(8).max(1000),
+            flightApiKey: z.string().min(8).max(1000).optional(),
             accessToken: z.string().min(32).max(128),
             signature: z.string().max(256),
           })
@@ -179,6 +184,7 @@ const server = createServer(async (request, response) => {
         store.close();
         guides.close();
         runtime.apiKey = provision.apiKey;
+        runtime.flightApiKey = provision.flightApiKey;
         appToken = provision.accessToken;
         return json(response, 200, { ok: true });
       }
@@ -204,6 +210,12 @@ const server = createServer(async (request, response) => {
         const { runId, runKey, text } = runCredentials.extend({ text: guideText }).strict().parse(input);
         const guide = guides.reply(runId, runKey, text);
         return json(response, guide ? 200 : 404, guide ? { guide } : { error: "This search has expired or was cleared." });
+      }
+      if (path === "/api/runs/guide-fares") {
+        if (!runtime.flightApiKey) return json(response, 503, { error: "Live flight fares are not enabled for this workspace." });
+        const { runId, runKey, revision } = runCredentials.extend({ revision: z.number().int().positive() }).strict().parse(input);
+        const guide = guides.checkFares(runId, runKey, revision);
+        return json(response, guide ? 200 : 404, guide ? { guide } : { error: "This search has changed, expired or was cleared." });
       }
       if (path === "/api/runs/guide-read" || path === "/api/runs/guide-cancel" || path === "/api/runs/guide-clear") {
         const { runId, runKey } = runCredentials.strict().parse(input);

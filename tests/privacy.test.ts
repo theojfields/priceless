@@ -114,6 +114,7 @@ test("prices require an exact source excerpt, exact product, matching currency, 
     { price: 169.99 },
     { currency: "CAD" },
     { title: "Sony WH-1000XM4 Black" },
+    { title: "Sony WH-1000XM50 Black" },
     { title: "Sony WH-1000XM5 Silver" },
     { condition: "used" },
     { sourceIndex: 7 },
@@ -151,6 +152,9 @@ test("prices require an exact source excerpt, exact product, matching currency, 
     groundedOffers({ offers: [offer] }, [unrelated], goal, "worker").length,
     0,
   );
+  assert.equal(groundedOffers({ offers: [offer] }, [
+    { ...sources[0], url: "https://shop.com/search?q=WH-1000XM5" },
+  ], goal, "worker").length, 0);
 });
 test("only the pinned owner can provision, signatures bind secrets, and challenges cannot replay", () => {
   const owner = generateKeyPairSync("ed25519");
@@ -196,4 +200,10 @@ test("only the pinned owner can provision, signatures bind secrets, and challeng
     }),
     false,
   );
+  const farePayload = { ...payload, nonce: provisioning.challenge(), flightApiKey: "owner-fare-key" };
+  assert.equal(provisioning.accept({
+    ...farePayload,
+    flightApiKey: "substituted-fare-key",
+    signature: sign(null, provisioningMessage(farePayload), owner.privateKey).toString("base64"),
+  }), false);
 });

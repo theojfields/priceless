@@ -140,10 +140,13 @@ export function assertGoal(goal: Goal): void {
 }
 
 export function productMatches(goal: Goal, title: string): boolean {
-  const normalize = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalize = (v: string) => v.normalize("NFKD").toLowerCase().replace(/\p{M}/gu, "");
   const normalized = normalize(title);
   return `${goal.product} ${goal.variant}`
     .split(/\s+/)
     .filter((v) => v.length > 1)
-    .every((word) => normalized.includes(normalize(word)));
+    .every((word) => {
+      const parts = normalize(word).match(/[a-z]+|[0-9]+/g);
+      return parts && new RegExp(`(?:^|[^a-z0-9])${parts.join("[\\s\\p{Pd}]*")}(?![a-z0-9])`, "u").test(normalized);
+    });
 }

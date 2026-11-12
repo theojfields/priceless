@@ -22,7 +22,7 @@ The project includes a local Node 24 runtime to satisfy the pinned Tinfoil SDK's
 ## What is implemented
 
 - Two starting boxes: **Paste a link** or **State a goal**. For flights and open-ended shopping requests, guided search starts with the details available and asks for missing details in the same conversation. Exact products still go through review before price comparison.
-- Flight searches surface public schedule and route references. Use the fare provider to verify availability and current prices.
+- When live fares are enabled, flight searches check the exact itinerary and rank airline-direct total prices from Skyscanner, with a booking link for each result. The shopper chooses when to share trip details with the fare provider. Without a fare key, use the Google Flights handoff.
 - Responsive comparison results, source excerpts, activity, cancellation, and clearing. Market and private price ceiling are under Shopping options.
 - A private budget filter that stays in browser memory and never enters a task or model prompt.
 - An immutable, hashed goal and independently seeded synthetic contexts, including a neutral control.
@@ -54,6 +54,7 @@ The comparison is a set of source-backed **observations**, not proof of a univer
 | `server/privacy.ts` | Strict task boundary, goal integrity, independent personas, URL policy |
 | `server/intake.ts` | Strict link/goal intake and source-supported draft validation |
 | `server/guide.ts`, `server/guide-store.ts` | Guided flight and shopping research, follow-ups, and temporary sessions |
+| `server/flights.ts` | Optional live fare lookup, exact itinerary filtering, and airline booking links |
 | `server/worker.ts` | Disposable worker's fixed research workflow |
 | `server/runner.ts` | Worker process lifecycle and broker-only tools |
 | `server/tinfoil.ts` | Attested inference and MCP search/fetch integration |

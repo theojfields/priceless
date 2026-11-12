@@ -15,6 +15,7 @@ const publicKey = (await readFile("deploy/owner-public.pem", "utf8")).replace(
 const domains = [
   "inference.tinfoil.sh",
   "websearch.tinfoil.sh",
+  "partners.api.skyscanner.net",
   "atc.tinfoil.sh",
   "github-proxy.tinfoil.sh",
   "kds-proxy.tinfoil.sh",

@@ -25,6 +25,9 @@ const interpretation = z.object({
   departureTime: field,
   flightNumber: field,
   returnDate: field,
+  adults: field,
+  cabin: field,
+  airline: field,
   preferences: z.array(z.string().max(100)).max(5).optional(),
 });
 
@@ -37,7 +40,22 @@ export interface GuideContext {
 export interface GuideResearchPlan {
   plan: GuidePlan;
   query?: string;
+  flight?: FlightRequest;
   matches: (text: string) => boolean;
+}
+
+export interface FlightRequest {
+  origin: string;
+  destination: string;
+  date: string;
+  returnDate?: string;
+  time?: { from: number; to: number };
+  number?: string;
+  nonstop: boolean;
+  airline?: string;
+  adults: number;
+  cabin: "economy" | "premium economy" | "business" | "first";
+  country: Goal["country"];
 }
 
 const fold = (value: string) => value.normalize("NFKD").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
@@ -66,14 +84,16 @@ export function resolveTravelDate(value: string, today: string): string {
     base.setUTCDate(base.getUTCDate() + (weekday[1] === "next" && offset === 0 ? 7 : offset));
     return base.toISOString().slice(0, 10);
   }
-  const named = /^([a-z]+)\.? (\d{1,2})(?:st|nd|rd|th)?(?:,? (\d{4}))?$/.exec(input);
+  const named = /^(?:(sunday|monday|tuesday|wednesday|thursday|friday|saturday),? )?([a-z]+)\.? (\d{1,2})(?:st|nd|rd|th)?(?:,? (\d{4}))?$/.exec(input);
   if (named) {
-    const month = months.findIndex((name) => name === named[1] || name.slice(0, 3) === named[1] || (named[1] === "sept" && name === "september"));
+    const [, statedWeekday, name, day, year] = named;
+    const month = months.findIndex((full) => full === name || full.slice(0, 3) === name || (name === "sept" && full === "september"));
     if (month >= 0) {
-      const suffix = `-${String(month + 1).padStart(2, "0")}-${named[2].padStart(2, "0")}`;
-      let candidate = `${named[3] ?? base.getUTCFullYear()}${suffix}`;
-      if (!named[3] && candidate < today) candidate = `${base.getUTCFullYear() + 1}${suffix}`;
-      return isoDay(candidate) ? candidate : "";
+      const suffix = `-${String(month + 1).padStart(2, "0")}-${day.padStart(2, "0")}`;
+      let candidate = `${year ?? base.getUTCFullYear()}${suffix}`;
+      if (!year && candidate < today) candidate = `${base.getUTCFullYear() + 1}${suffix}`;
+      const resolved = isoDay(candidate);
+      return resolved && (!statedWeekday || days[resolved.getUTCDay()] === statedWeekday) ? candidate : "";
     }
   }
   // Keep date ranges and flexible periods as stated, rather than picking a day.
@@ -89,19 +109,30 @@ function publicField(value: string | undefined, turns: readonly string[]): strin
   return text;
 }
 
-function routeMatch(value: string, text: string) {
-  // State and country qualifiers disambiguate the search, but are not always present in a result.
-  const name = fold(value.split(",")[0]);
-  return !name || text.includes(name);
-}
-
 function flightNumber(value: string) {
   const match = /^([A-Z][A-Z0-9]|[0-9][A-Z])\s*-?\s*(\d{1,4}[A-Z]?)$/i.exec(value);
   return match ? `${match[1].toUpperCase()} ${match[2].toUpperCase()}` : "";
 }
 
-function explicitFlightNumber(turn: string) {
-  return flightNumber(/\bflight\s*(?:number\s*|#\s*)?((?:[A-Z][A-Z0-9]|[0-9][A-Z])\s*-?\s*\d{1,4}[A-Z]?)\b/i.exec(turn)?.[1] ?? "");
+function explicitFlightNumbers(turn: string): string[] {
+  const marked = /\bflight\s*(?:number\s*#?\s*|#\s*)((?:[A-Z][A-Z0-9]|[0-9][A-Z])\s*-?\s*\d{1,4}[A-Z]?)(?![\w:]|\s*(?:a\.?m\.?|p\.?m\.?)\b)/gi;
+  const bare = /\b((?:[A-Z][A-Z0-9]|[0-9][A-Z])\s*-?\s*\d{1,4}[A-Z]?)(?![\w:]|\s*(?:[aApP]\.?[mM]\.?)\b)/g;
+  return [...turn.matchAll(marked), ...turn.matchAll(bare)].map((match) => flightNumber(match[1])).filter(Boolean);
+}
+
+function travelTime(value: string): FlightRequest["time"] {
+  const input = value.toLowerCase().replace(/\./g, "").trim();
+  const windows: Record<string, [number, number]> = {
+    morning: [0, 719], afternoon: [720, 1019], evening: [1020, 1259], night: [1260, 1439],
+  };
+  if (windows[input]) return { from: windows[input][0], to: windows[input][1] };
+  const clock = /^(?:(at|after|before) )?(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?$/.exec(input);
+  if (!clock) return;
+  const [, modifier, hour, minute, meridiem] = clock;
+  const h = Number(hour);
+  if (meridiem ? h < 1 || h > 12 : h > 23 || !minute) return;
+  const minutes = (meridiem ? (h % 12) + (meridiem === "pm" ? 12 : 0) : h) * 60 + Number(minute ?? 0);
+  return modifier === "after" ? { from: minutes + 1, to: 1439 } : modifier === "before" ? { from: 0, to: minutes - 1 } : { from: minutes, to: minutes };
 }
 
 export function buildGuide(context: GuideContext, output: unknown): GuideResearchPlan {
@@ -110,35 +141,56 @@ export function buildGuide(context: GuideContext, output: unknown): GuideResearc
   const { turns, country, today } = context;
   const get = (value: string | undefined) => publicField(value, turns);
   const preferences = [...new Set((data.preferences ?? []).map(get).filter(Boolean))];
-  const statedNumber = explicitFlightNumber(turns.at(-1) ?? "");
-  if (data.kind === "flight" || statedNumber) {
+  const latest = turns.at(-1) ?? "";
+  const statedNumbers = explicitFlightNumbers(latest);
+  const marked = /\bflight\s*(?:number\b|#)/i.test(latest);
+  if (data.kind === "flight" || (marked && statedNumbers.length)) {
     const origin = get(data.origin), destination = get(data.destination);
     const date = resolveTravelDate(get(data.departureDate), today);
     const time = get(data.departureTime);
-    const number = flightNumber(get(data.flightNumber)) || statedNumber;
+    const proposed = flightNumber(get(data.flightNumber));
+    const number = proposed && turns.some((turn) => explicitFlightNumbers(turn).includes(proposed))
+      ? proposed : marked ? statedNumbers[0] ?? "" : "";
     const tripChoice = turns.toReversed().map((turn) => [...turn.matchAll(/\b(round[ -]trip|one[ -]way)\b/gi)].at(-1)?.[1]).find(Boolean);
     const returning = /^one/i.test(tripChoice ?? "") ? "" : resolveTravelDate(get(data.returnDate), today);
     const roundTrip = returning || /^round/i.test(tripChoice ?? "");
     const trip = roundTrip ? "Round trip" : tripChoice ? "One way" : "One way for now";
     const route = origin && destination ? `${origin} → ${destination}` : origin ? `Flights from ${origin}` : destination ? `Flights to ${destination}` : "";
     const title = route || (number ? `Flight ${number}` : "Flight search");
+    const adultField = get(data.adults);
+    const adultCount = /\b([1-9]|one|two|three|four|five|six|seven|eight|nine)\b/i.exec(adultField)?.[1].toLowerCase();
+    const adults = adultCount ? (Number(adultCount) || ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"].indexOf(adultCount) + 1) : 1;
+    const cabinField = get(data.cabin).toLowerCase().replace(/ class$/, "");
+    const cabin = (["economy", "premium economy", "business", "first"] as const).find((item) => item === cabinField) ?? "economy";
+    const airline = get(data.airline);
+    const nonstop = preferences.some((value) => /^(?:only )?(?:non[ -]?stop|no stops|direct)(?: flights?| only)?$/i.test(value));
+    const timeWindow = travelTime(time);
+    const other = preferences.filter((value) => !/^(?:only )?(?:non[ -]?stop|no stops|direct)(?: flights?| only)?$/i.test(value) &&
+      ![adultField, cabinField, airline].some((field) => field && fold(field) === fold(value)));
     const details = [
       { label: "From", value: origin }, { label: "To", value: destination },
       { label: "Departure date", value: date }, { label: "Departure time", value: time },
       { label: "Flight", value: number }, { label: "Return date", value: returning },
       { label: "Trip", value: trip }, { label: "Preferences", value: preferences.join(", ") },
+      { label: "Passengers", value: `${adults} ${adults === 1 ? "adult" : "adults"}` },
+      { label: "Cabin", value: cabin }, { label: "Airline", value: airline },
     ].filter(({ value }) => value);
-    const question = !origin && !destination && !number ? "Where are you flying from and to?" :
-      !origin && !number ? "Where are you flying from?" :
-      !destination && !number ? "Where are you flying to?" :
-      !date ? "When would you like to leave? A date or a flexible window is fine." :
-      roundTrip && !returning ? "When would you like to fly back?" : undefined;
+    const question = !origin && !destination ? "Where are you flying from and to?" :
+      !origin ? "Where are you flying from?" :
+      !destination ? "Where are you flying to?" :
+      !isoDay(date) || date < today ? "Which departure date should I check for fares?" :
+      roundTrip && (!isoDay(returning) || returning < date) ? "Which date would you like to fly back?" :
+      time && !timeWindow ? "What local departure time should I check? Try 4:10 PM or a window like morning." :
+      other.length || (adultField && !adultCount) || (cabinField && cabinField !== cabin) ? "I can check dates, departure times, cabin, adult travelers, airlines and nonstop flights. Which of those should I use?" : undefined;
     const terms = [number ? `Flight ${number}` : "Flights", origin && `from ${origin}`, destination && `to ${destination}`, date && `departing ${date}`, time, returning && `returning ${returning}`, roundTrip ? "round trip" : "one way", ...preferences].filter(Boolean).join(" ");
     const flightSearchUrl = origin && destination ? `https://www.google.com/travel/flights?q=${encodeURIComponent(terms)}` : undefined;
     return {
-      plan: { kind: "flight", title, details, question, flightSearchUrl },
-      query: origin || destination || number ? `${terms} airline schedule`.slice(0, 390) : undefined,
-      matches: (text) => number ? fold(text).includes(fold(number)) : routeMatch(origin, fold(text)) && routeMatch(destination, fold(text)),
+      plan: { kind: "flight", title, details, question, flightSearchUrl, canCheckFares: !question },
+      flight: question ? undefined : {
+        origin, destination, date, returnDate: returning || undefined, time: timeWindow,
+        number: number || undefined, nonstop, airline: airline || undefined, adults, cabin, country,
+      },
+      matches: () => false,
     };
   }
 

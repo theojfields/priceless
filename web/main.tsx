@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import type { AppConfig, Offer, ShoppingRun, ShoppingDraft } from "../shared/types";
+import { bestRetailOffer, knownRetailSeller } from "../shared/retail";
 import { exampleRun } from "./sample";
 import { initialize, operation, type CreateResponse } from "./api";
 import { GuidePanel } from "./guide-panel";
@@ -308,6 +309,8 @@ function App() {
       : uniqueOffers;
   const lowest = uniqueOffers[0];
   const highest = uniqueOffers.at(-1);
+  const recommended = run?.mode === "live" ? bestRetailOffer(uniqueOffers, run.goal) : lowest;
+  const headlineOffer = recommended ?? lowest;
 
   return (
     <div
@@ -446,6 +449,8 @@ function App() {
               active={guided.active}
               busy={guided.busy}
               canReply={guided.canReply}
+              liveFares={!!config?.flightFaresConfigured}
+              onCheckFares={() => void guided.checkFares()}
               onReply={guided.reply}
               onStop={() => void guided.stop()}
               onClear={() => { setGoalText(""); setReviewOpen(false); setError(""); void guided.clear(); }}
@@ -690,22 +695,26 @@ function App() {
                 <div className="lowest-card">
                   <div className="tiny-label">
                     {active
-                      ? "YOUR SEARCH IS UNDERWAY"
+                      ? (recommended ? "BEST OPTION SO FAR" : "YOUR SEARCH IS UNDERWAY")
+                      : recommended ? (run.mode === "sample" ? "LOWEST SAMPLE ITEM PRICE" : "BEST OPTION · LOWEST ITEM PRICE FROM A KNOWN STORE")
                       : "LOWEST OBSERVED ITEM PRICE"}
                   </div>
-                  {lowest ? (
+                  {headlineOffer ? (
                     <>
                       <div className="price-big">
-                        {money(lowest.price, lowest.currency)}
+                        {money(headlineOffer.price, headlineOffer.currency)}
                         <span>{run.goal.currency}</span>
                       </div>
                       <p>
-                        at {lowest.merchant}
+                        at {headlineOffer.merchant}
                         <ArrowUpRight size={13} />
                       </p>
                       <div className="unknown-total">
-                        Shipping and tax not confirmed
+                        {recommended ? "Shipping and tax not confirmed" : "Seller, shipping, and tax not verified"}
                       </div>
+                      {run.mode === "live" && <a className="guide-provider retail-best-link" href={headlineOffer.url} target="_blank" rel="noopener noreferrer">
+                        {recommended ? "View product at store" : "Inspect listing"} <ArrowUpRight size={15} />
+                      </a>}
                     </>
                   ) : (
                     <>
@@ -811,8 +820,8 @@ function App() {
                         <div>
                           <strong>
                             {offer.merchant}
-                            {offer.price === lowest?.price && (
-                              <span className="best-label">LOWEST FOUND</span>
+                            {offer.id === recommended?.id && (
+                              <span className="best-label">{run.mode === "sample" ? "LOWEST SAMPLE" : "BEST OPTION"}</span>
                             )}
                           </strong>
                           <p>{offer.title}</p>
@@ -830,14 +839,20 @@ function App() {
                       <strong className="table-price">
                         {money(offer.price, offer.currency)}
                       </strong>
-                      <span className="unconfirmed">Not confirmed</span>
-                      <button
+                      <span className="unconfirmed">{run.mode === "live" && !knownRetailSeller(offer, run.goal.country) ? "Seller unverified" : "Not confirmed"}</span>
+                      {run.mode === "live" ? <a
+                        className="source-button retail-open"
+                        href={offer.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`View listing at ${offer.merchant}`}
+                      >Open <ArrowUpRight size={15} /></a> : <button
                         className="source-button"
                         onClick={() => setOfferDetail(offer)}
                         aria-label={`See evidence for ${offer.merchant}`}
                       >
                         <ArrowUpRight size={18} />
-                      </button>
+                      </button>}
                     </div>
                   ))}
                   {!displayedOffers.length && (
@@ -1307,7 +1322,7 @@ function InfoPage({
           [
             "03",
             "Retrieve and check the sources",
-            "Tinfoil’s attested search finds public sources. Product prices must appear in a fetched excerpt and match the item. Flight references point you to the provider for current fares and availability.",
+            "Product prices must appear in a fetched excerpt and match the item. When enabled, live flight search checks the itinerary and shows prices with airline booking links.",
           ],
           [
             "04",

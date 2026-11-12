@@ -62,10 +62,10 @@ export function groundedOffers(
       item.condition !== "new" ||
       item.currency !== goal.currency ||
       !productMatches(goal, item.title) ||
-      !productMatches(goal, `${source.title} ${source.content}`) ||
+      !productMatches(goal, source.title || source.content.slice(0, 700)) ||
       !normalize(source.content).includes(normalize(item.evidence)) ||
       !evidenceContainsPrice(item.evidence, item.price, item.currency) ||
-      /\b(refurbished|pre-owned|renewed|per month|monthly|installment|was\s+[$£]|used condition)\b/i.test(
+      /\b(refurbished|pre-owned|renewed|per month|monthly|installment|was\s+[$£]|used condition|sold out|out of stock|member(?:s only| price)|trade[ -]in)\b/i.test(
         item.evidence,
       )
     )
@@ -73,6 +73,8 @@ export function groundedOffers(
     let url: string;
     try {
       url = publicProductUrl(source.url);
+      const path = new URL(url).pathname;
+      if (path === "/" || /^\/(?:search|browse|collections?|categor(?:y|ies)|catalog)(?:\/|$)/i.test(path)) return [];
     } catch {
       return [];
     }

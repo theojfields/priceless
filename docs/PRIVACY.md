@@ -36,16 +36,19 @@ The controller accepts a strict task schema. Unknown fields—including budgets 
 | --- | --- |
 | Entered link, goal text and follow-ups, reviewed product, variant, selected market | Verified application enclave |
 | Goal text, follow-ups, or retrieved linked page during interpretation | Tinfoil inference enclave |
-| Selected product or trip search terms and source URLs | Tinfoil search enclave and its external provider |
+| Selected product search terms and source URLs | Tinfoil search enclave and its external provider |
+| Airports/cities, travel dates, market, party size, and cabin, when the shopper requests live fares | Skyscanner partner API |
 | Goal, synthetic style, source text | Tinfoil inference enclave |
 | Dedicated private price ceiling field | No external recipient; browser memory only |
 | Workspace access code and per-run capability | Application enclave, inside encrypted bodies |
-| Inference API key | Application enclave via signed provisioning, then attested Tinfoil provider requests |
+| Inference API key and optional fare provider key | Application enclave via signed provisioning, then their respective providers |
 | IP, timing, byte counts, account/billing metadata | Infrastructure operators according to their policies |
 
 The application's production egress is restricted to providers and verification dependencies. It has no arbitrary browsing, shell, account, purchase, or filesystem tools available to the model. A worker's predefined workflow can request discovery, page retrieval, and extraction, once each. The parent constructs those requests from its own authoritative goal and retrieved data, not worker-supplied arbitrary arguments.
 
 Goal text and follow-ups go to confidential inference to identify the request and retain details across replies. The application builds public searches from selected terms, such as the route and travel date, rather than sending the full conversation to the search provider. Keep personal details out of the goal and replies; use the separate price ceiling field for a budget that must stay on the device. Public URLs have tracking parameters removed before page retrieval. Exact product intake uses details supported by the supplied text or fetched page, and comparison workers only start after the shopper confirms the draft. Opening a fare link shares the search terms in that link with the fare provider in the user's ordinary browser.
+
+Live fares are optional. If the owner enables them, pressing **Check live fares** sends structured trip details over HTTPS to Skyscanner, outside the Tinfoil attestation boundary. The conversation, prior quote, workspace code, and Tinfoil inference key are never included in that provider request. Booking links retain the fare provider's selection parameters and open in the user's ordinary browser.
 
 ## Retention and disposal
 

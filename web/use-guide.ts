@@ -89,6 +89,23 @@ export function useGuide(accessToken: string, onExpire: () => void) {
     }
   }
 
+  async function checkFares() {
+    if (!guide || !key || busy || active) return;
+    const id = ++request.current;
+    setError("");
+    setBusy(true);
+    try {
+      const { guide: next } = await operation<{ guide: GuidedSearch }>("guide-fares", {
+        runId: guide.id, runKey: key, revision: guide.revision,
+      }, accessToken);
+      if (request.current === id) setGuide(next);
+    } catch (err) {
+      if (request.current === id) setError((err as Error).message);
+    } finally {
+      if (request.current === id) setBusy(false);
+    }
+  }
+
   async function stop() {
     if (!guide || !key || busy) return;
     const id = ++request.current;
@@ -116,5 +133,5 @@ export function useGuide(accessToken: string, onExpire: () => void) {
     }
   }
 
-  return { guide, error, active, busy, canReply: !!key, start, reply, stop, clear };
+  return { guide, error, active, busy, canReply: !!key, start, reply, checkFares, stop, clear };
 }

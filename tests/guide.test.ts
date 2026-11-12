@@ -13,9 +13,9 @@ test("an exact flight retains the number, time, route and resolved date without 
   });
   assert.equal(guide.plan.kind, "flight");
   assert.equal(guide.plan.question, undefined);
-  assert.match(guide.query!, /Flight DL 2786 from Columbus, OH to Atlanta, GA departing 2026-11-16 7:12 PM/);
-  assert.equal(guide.matches("Delta flight DL2786 schedule"), true);
-  assert.equal(guide.matches("DL2787 schedule"), false);
+  assert.equal(guide.flight?.number, "DL 2786");
+  assert.deepEqual(guide.flight?.time, { from: 19 * 60 + 12, to: 19 * 60 + 12 });
+  assert.equal(guide.query, undefined);
   assert.match(new URL(guide.plan.flightSearchUrl!).searchParams.get("q")!, /DL 2786.*2026-11-16.*7:12 PM/);
 });
 
@@ -24,11 +24,10 @@ test("a route and morning window can be searched without knowing a flight number
     kind: "flight", origin: "Columbus", destination: "Atlanta", departureDate: "next Monday", departureTime: "morning", flightNumber: "DL 9999",
   });
   assert.equal(guide.plan.title, "Columbus → Atlanta");
-  assert.match(guide.query!, /2026-11-16 morning/);
-  assert.doesNotMatch(guide.query!, /9999/);
+  assert.equal(guide.flight?.date, "2026-11-16");
+  assert.deepEqual(guide.flight?.time, { from: 0, to: 719 });
+  assert.equal(guide.flight?.number, undefined);
   assert.equal(guide.plan.question, undefined);
-  assert.equal(guide.matches("Flights from Columbus to Atlanta"), true);
-  assert.equal(guide.matches("Flights from Columbus to Phoenix"), false);
   assert.equal(resolveTravelDate("next Monday", "2026-11-16"), "2026-11-23");
   assert.equal(resolveTravelDate("tomorrow", "2026-12-31"), "2027-01-01");
   assert.equal(resolveTravelDate("Nov 16", "2026-11-11"), "2026-11-16");
@@ -61,33 +60,56 @@ test("references require a privacy-checked response, relevant evidence and a pub
   assert.equal(sources[0].url, "https://airline.example.org/routes");
 });
 
-test("a follow-up is accepted during discovery and supersedes stale work without losing the route", async () => {
-  const calls: { query: string; signal: AbortSignal; finish: (value: unknown) => void }[] = [];
+test("the reported time is not a flight number and the quoted price is not a search term", () => {
+  for (const phrasing of ["flight at 4:10 PM", "FLIGHT AT 4:10 PM", "flight at 4 PM"]) {
+    const time = phrasing.includes(":10") ? "4:10 PM" : "4 PM";
+    const guide = buildGuide(context(
+      "Find me a one way flight from CMH to Atlanta next Monday at 4:10 PM",
+      `I see $404. Find a ${phrasing} on Monday, Nov 16th.`,
+    ), {
+      kind: "flight", origin: "CMH", destination: "Atlanta", departureDate: "Monday, Nov 16th", departureTime: time, flightNumber: "AT 4",
+    });
+    assert.equal(guide.flight?.date, "2026-11-16");
+    assert.equal(guide.flight?.number, undefined);
+    assert.equal(guide.flight?.time?.from, time.includes(":10") ? 970 : 960);
+    assert.equal(guide.plan.question, undefined);
+    assert.doesNotMatch(guide.plan.flightSearchUrl!, /404|Flight%20AT%204/);
+  }
+});
+
+test("a flight follow-up preserves the route, invalidates stale work and requires a new explicit fare check", async () => {
+  const calls: { date: string; signal: AbortSignal; finish: (result: { fares: []; question?: string }) => void }[] = [];
   const store = new GuideStore({
-    plan: async (current) => buildGuide(current, { ...route, departureDate: current.turns.length === 2 ? "next Monday" : "" }),
-    search: (query, _country, signal) => new Promise((finish) => calls.push({ query, signal, finish })),
+    plan: async (current) => buildGuide(current, {
+      ...route, departureDate: current.turns.at(-1)?.includes("Tuesday") ? "next Tuesday" : "next Monday",
+    }),
+    search: async () => { throw new Error("Do not search indexed pages for flight fares"); },
+    fares: (flight, signal) => new Promise((finish) => calls.push({ date: flight.date, signal, finish })),
   });
   try {
-    const { guide, runKey } = store.create({ text: "Find flights from Columbus, OH to Atlanta, GA", country: "US", today: "2026-11-11" });
+    const { guide, runKey } = store.create({ text: "Find flights from Columbus, OH to Atlanta, GA next Monday", country: "US", today: "2026-11-11" });
     assert.equal(guide.status, "planning");
     assert.equal(store.read(guide.id, "wrong key"), undefined);
     await setImmediate();
-    const waiting = store.read(guide.id, runKey)!;
-    assert.equal(waiting.status, "searching");
-    assert.match(waiting.plan!.question!, /When would you like to leave/);
-    assert.match(calls[0].query, /from Columbus, OH to Atlanta, GA/);
-    assert.equal(store.reply(guide.id, runKey, "next Monday")?.revision, 2);
+    assert.equal(store.read(guide.id, runKey)?.status, "ready");
+    assert.equal(calls.length, 0);
+    assert.equal(store.checkFares(guide.id, runKey, 1)?.status, "searching");
+    assert.equal(calls[0].date, "2026-11-16");
+    assert.equal(store.reply(guide.id, runKey, "next Tuesday")?.revision, 2);
     assert.equal(calls[0].signal.aborted, true);
     await setImmediate();
-    assert.match(calls[1].query, /from Columbus, OH to Atlanta, GA departing 2026-11-16/);
-    calls[1].finish({ pii_checked: true, results: [{ title: "Columbus to Atlanta schedule", url: "https://airline.example.org/new" }] });
-    calls[0].finish({ pii_checked: true, results: [{ title: "Columbus to Atlanta old result", url: "https://airline.example.org/old" }] });
+    assert.equal(store.checkFares(guide.id, runKey, 1), undefined);
+    assert.equal(calls.length, 1);
+    assert.equal(store.read(guide.id, runKey)?.plan?.title, "Columbus, OH → Atlanta, GA");
+    assert.equal(store.checkFares(guide.id, runKey, 2)?.status, "searching");
+    assert.equal(calls[1].date, "2026-11-17");
+    calls[0].finish({ fares: [], question: "Outdated question" });
+    calls[1].finish({ fares: [] });
     await setImmediate();
     const updated = store.read(guide.id, runKey)!;
     assert.equal(updated.status, "ready");
     assert.equal(updated.plan?.question, undefined);
     assert.equal(updated.turns.length, 2);
-    assert.deepEqual(updated.sources.map(({ url }) => url), ["https://airline.example.org/new"]);
     assert.equal(store.clear(guide.id, runKey), true);
     assert.equal(store.read(guide.id, runKey), undefined);
   } finally {

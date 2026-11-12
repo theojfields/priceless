@@ -3,6 +3,7 @@ import { createPublicKey, randomBytes, verify } from "node:crypto";
 export function provisioningMessage(payload: {
   nonce: string;
   apiKey: string;
+  flightApiKey?: string;
   accessToken: string;
 }): Buffer {
   return Buffer.from(
@@ -11,6 +12,7 @@ export function provisioningMessage(payload: {
       nonce: payload.nonce,
       apiKey: payload.apiKey,
       accessToken: payload.accessToken,
+      flightApiKey: payload.flightApiKey,
     }),
   );
 }
@@ -34,6 +36,7 @@ export class Provisioning {
   accept(input: {
     nonce: string;
     apiKey: string;
+    flightApiKey?: string;
     accessToken: string;
     signature: string;
   }): boolean {

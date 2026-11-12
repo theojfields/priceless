@@ -72,6 +72,16 @@ Open the app's connection dialog and enter the workspace access code locally. Th
 
 Provisioning again terminates existing runs and rotates the access code. Temporary provider-side prompt caches and infrastructure metadata have independent retention.
 
+## Enable live flight prices (optional)
+
+Use an approved [Skyscanner partner API key](https://developers.skyscanner.net/docs/getting-started/authentication) with Flights Live Prices and flight autosuggest access. After deploying a release that includes the fare adapter, provision both keys at the hidden terminal prompts:
+
+```sh
+npm run provision -- --flights
+```
+
+The signed request carries the fare key into enclave memory. It is not saved to disk or passed to workers. Provisioning without `--flights` disables the fare adapter. The measured egress configuration permits only the provider host; the app sends trip details there only when the shopper selects **Check live fares**. If the key is unavailable, the itinerary can still be opened on Google Flights. Confirm real airline coverage and booking links using your partner account before relying on it.
+
 ## Stronger client trust
 
 A hosted web application still requires trust in the JavaScript delivered to the browser. Attestation does not make an untrusted frontend safe: a modified frontend could read input before encryption.

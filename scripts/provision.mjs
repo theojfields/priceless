@@ -14,12 +14,12 @@ if (!secure.getVerificationDocument().securityVerified)
   throw new Error("Attestation did not pass. No credentials were sent.");
 console.log("Application enclave verified.");
 
-async function hiddenPrompt() {
+async function hiddenPrompt(label) {
   if (!process.stdin.isTTY)
     throw new Error(
       "Set TINFOIL_API_KEY in the environment or run this command in an interactive terminal.",
     );
-  process.stdout.write("Tinfoil inference API key (hidden): ");
+  process.stdout.write(`${label} (hidden): `);
   process.stdin.setRawMode(true);
   process.stdin.resume();
   return new Promise((resolve, reject) => {
@@ -50,8 +50,13 @@ async function hiddenPrompt() {
     process.stdin.on("data", listener);
   });
 }
-const apiKey = process.env.TINFOIL_API_KEY || (await hiddenPrompt());
+const apiKey = process.env.TINFOIL_API_KEY || (await hiddenPrompt("Tinfoil inference API key"));
 if (apiKey.length < 8) throw new Error("An inference API key is required.");
+const flightApiKey = process.argv.includes("--flights")
+  ? await hiddenPrompt("Skyscanner partner API key")
+  : undefined;
+if (flightApiKey !== undefined && flightApiKey.length < 8)
+  throw new Error("A Skyscanner partner API key is required for --flights.");
 const challenge = await secure.fetch(
   `${settings.enclaveURL}/api/provision/challenge`,
   {
@@ -64,7 +69,7 @@ if (!challenge.ok)
   throw new Error("Could not obtain the provisioning challenge.");
 const { nonce } = await challenge.json();
 const accessToken = randomBytes(32).toString("hex");
-const payload = { nonce, apiKey, accessToken };
+const payload = { nonce, apiKey, accessToken, flightApiKey };
 const message = Buffer.from(
   JSON.stringify({ purpose: "priceless-provision-v1", ...payload }),
 );
